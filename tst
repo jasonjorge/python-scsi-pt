@@ -18,67 +18,60 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from ScsiPT import *
-from CDB    import *
-from Cmd    import *
+from CDB import *
+from AppLogging import *
 
-
-def dumpbuf(buf):
-    """
-    Print a ctypes buffer as hexadecimal bytes.
-    This code is not pretty.
-    """
-    a = 0
-    for i in buf.raw:
-        if a % 16 == 0:
-            adr = "%.4x" % a
-            hxd = ''
-            asc = ''
-        hxd += " %.2x" % ord(i)
-        asc += i if (32 <= ord(i) and ord(i) < 128) else '.'
-        if (a+1) % 16 == 0:
-            print adr, "%-49s" % hxd, asc
-        a += 1
-    if a % 16 != 0:
-        print adr, "%-49s" % hxd, asc 
 
 if __name__ == "__main__":
-    print "version:", ScsiPT.sg.scsi_pt_version()
-    pt = ScsiPT("/dev/sg4")
-
-    cdb_tur = CDB([0,0,0,0,0,0])
+    logger.info("version:".format(ScsiPT.sg.scsi_pt_version()))
+    pt = ScsiPT(b"/dev/sdb")
+    cdb_tur = CDB([0, 0, 0, 0, 0, 0])
 
     retval = pt.sendcdb(cdb_tur)
-    print "retval =", retval
-
-    print "sense"
-    dumpbuf(cdb_tur.sense)
-
+    logger.info("retval for TUR: {}".format(retval))
+    logger.info("TUR sense     : {}".format(pt.dumpbuf(cdb_tur.sense)))
     del cdb_tur
-    
-    alloc = 0xff
-    cdb_inq = CDB([0x12,0,0,0,alloc,0])
+
+    alloc = 0x60
+    cdb_inq = CDB([0x12, 0, 0, 0, alloc, 0])
     cdb_inq.set_data_in(alloc)
     retval = pt.sendcdb(cdb_inq)
-    print "retval =", retval
-
-    print "sense"
-    dumpbuf(cdb_inq.sense)
-
-    print "inq"
-    dumpbuf(cdb_inq.buf)
-        
+    logger.info("retval for inq: {}".format(retval))
+    logger.info("sense         : {}".format(pt.dumpbuf(cdb_inq.sense)))
+    logger.info('inq data      : {}'.format(pt.dumpbuf(cdb_inq.buf)))
     del cdb_inq
-    
-    cmd = Cmd("tur")
-    print cmd.cdb
 
-    cmd = Cmd("inq", {"evpd":0, "alloc":0xa4})
-    print cmd.cdb
-    cdb = CDB(cmd.cdb)
-    cdb.set_data_in(0xa4)
-    pt.sendcdb(cdb)
-    dumpbuf(cdb.buf)
-    del cdb
-    
+    # vdb pages
+    alloc = 0x24
+    cdb_inqpages = CDB([0x12, 0x01, 0x00, 0x00, alloc, 0x00])
+    cdb_inqpages.set_data_in(alloc)
+    retval = pt.sendcdb(cdb_inqpages)
+    logger.info("retval for inqpages: {}".format(retval))
+    logger.info("inqpages sense     : {}".format(pt.dumpbuf(cdb_inqpages.sense)))
+    inqpages = pt.dumpbuf(cdb_inqpages.buf)
+    logger.info('inqpages data      : {}'.format(inqpages))
+    logger.debug('Number of valid pages: {}'.format(inqpages[6:8]))
+    # pages = [x for x in inqpages]
+    x = 10
+    validpages = []
+    for i in range(int(inqpages[6:8])-1):  # subtract 1 for page 00
+        validpages.append(inqpages[x:x+2])
+        x += 2
+    logger.debug(validpages)
+    # exit()
+
+    # identify via SCSI passthrough
+    alloc = 0x200
+    cdb_ptident = CDB([0xa1, 0x08, 0x0E, 0x00, 0x01, 0x00, 0x00, 0x00, 0xA0, 0xEC, 0x00, 0x00])  # identify via ScsiPt16
+    cdb_ptident.set_data_in(alloc)
+    retval = pt.sendcdb(cdb_ptident)
+    logger.info("retval for pt_inq: {}".format(retval))
+    logger.info("pt_inq sense     : {}".format(pt.dumpbuf(cdb_ptident.sense)))
+    # ptinq = pt.dumpbuf(cdb_ptinq.buf)
+    # logger.info('inqpages data             : {}'.format(ptinq))
+    ptinqbs = pt.dumpbuf(cdb_ptident.buf, True)
+    logger.info('Identify via SCSI-Passthrough data byteswapped : {}'.format(ptinqbs))
+
+    del cdb_inq
+    del cdb_ptident
     del pt
-
