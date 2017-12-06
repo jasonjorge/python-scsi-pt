@@ -20,6 +20,7 @@
 import ctypes
 from ScsiPT import ScsiPT
 
+
 class CDB(object):
     """
     Manage the data structure that holds a passthrough request.
@@ -29,10 +30,10 @@ class CDB(object):
         # Construct CDB object for a passthrough request.
         super(CDB, self).__init__()
         self.objp = ScsiPT.sg.construct_scsi_pt_obj()
-        if self.objp == None:
+        if self.objp is None:
             raise Exception()
         # Add CDB to the object.
-        self.cdb = ctypes.create_string_buffer(str(bytearray(cdb)), len(cdb))
+        self.cdb = ctypes.create_string_buffer(bytes(bytearray(cdb)), len(cdb))
         ScsiPT.sg.set_scsi_pt_cdb(self.objp, self.cdb, len(self.cdb))
         # Add Request Sense buffer to object.
         self.sense = ctypes.create_string_buffer(rs_size)
@@ -40,13 +41,13 @@ class CDB(object):
         
     def __del__(self):
         # Destruct the object, if it exists.
-        if self.objp != None:
+        if self.objp is not None:
             ScsiPT.sg.destruct_scsi_pt_obj(self.objp)
             self.objp = None
-        #super(CDB, self).__del__()
+        # super(CDB, self).__del__()
             
     def set_data_out(self, buf):
-        self.buf = ctypes.create_string_buffer(str(bytearray(buf)), len(buf))
+        self.buf = ctypes.create_string_buffer(bytes(bytearray(buf)), len(buf))
         retval = ScsiPT.sg.set_scsi_pt_data_out(
             self.objp,
             self.buf,
@@ -62,5 +63,3 @@ class CDB(object):
             len(self.buf))
         if retval < 0:
             raise Exception(retval)
-
-
